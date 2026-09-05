@@ -3,8 +3,9 @@
 Prototype firmware for the physical BLE trigger used to improve Telescan
 discovery when iPhones are in the background.
 
-The first version only advertises a dedicated Spot service. It does not change
-the existing phone-to-phone BLE protocol and does not use the API.
+The Spot advertises a dedicated service, accepts a persistent BLE connection,
+and sends a lightweight heartbeat to subscribed debug builds. It does not
+change the existing phone-to-phone BLE protocol and does not use the API.
 
 ## ESP32 prototype
 

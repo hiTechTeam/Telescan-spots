@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <BLEDevice.h>
+#include <BLE2902.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
 #include <esp_efuse.h>
@@ -11,12 +12,21 @@ constexpr char kSpotServiceUUID[] =
     "A6B51001-8A5D-4F7A-9E4C-123456789101";
 constexpr char kSpotIdentityCharacteristicUUID[] =
     "A6B51002-8A5D-4F7A-9E4C-123456789102";
+constexpr char kSpotHeartbeatCharacteristicUUID[] =
+    "A6B51003-8A5D-4F7A-9E4C-123456789103";
 
 char spotID[24] = {};
+BLECharacteristic* heartbeatCharacteristic = nullptr;
+volatile bool spotConnected = false;
 
 class SpotServerCallbacks final : public BLEServerCallbacks {
  public:
-  void onDisconnect(BLEServer* server) override {
+  void onConnect(BLEServer*) override {
+    spotConnected = true;
+  }
+
+  void onDisconnect(BLEServer*) override {
+    spotConnected = false;
     BLEDevice::startAdvertising();
   }
 };
@@ -50,6 +60,16 @@ void startSpotAdvertising() {
       kSpotIdentityCharacteristicUUID,
       BLECharacteristic::PROPERTY_READ);
   identity->setValue(spotID);
+
+  heartbeatCharacteristic = service->createCharacteristic(
+      kSpotHeartbeatCharacteristicUUID,
+      BLECharacteristic::PROPERTY_READ |
+          BLECharacteristic::PROPERTY_NOTIFY);
+  heartbeatCharacteristic->addDescriptor(new BLE2902());
+  uint32_t initialHeartbeat = 0;
+  heartbeatCharacteristic->setValue(
+      reinterpret_cast<uint8_t*>(&initialHeartbeat),
+      sizeof(initialHeartbeat));
   service->start();
 
   BLEAdvertising* advertising = BLEDevice::getAdvertising();
@@ -73,9 +93,17 @@ void setup() {
   Serial.println("Telescan Spot Wake v0");
   Serial.printf("Spot ID: %s\n", spotID);
   Serial.printf("BLE service: %s\n", kSpotServiceUUID);
-  Serial.println("Advertising started");
+  Serial.println("Advertising and heartbeat service started");
 }
 
 void loop() {
-  delay(1000);
+  static uint32_t heartbeat = 0;
+  if (spotConnected && heartbeatCharacteristic != nullptr) {
+    ++heartbeat;
+    heartbeatCharacteristic->setValue(
+        reinterpret_cast<uint8_t*>(&heartbeat),
+        sizeof(heartbeat));
+    heartbeatCharacteristic->notify();
+  }
+  delay(20000);
 }
